@@ -2,18 +2,62 @@ import streamlit as st
 import pickle
 from sklearn.feature_extraction.text import TfidfTransformer
 import numpy as np
-import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
+import re
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+import os
 
-# Load the XGBoost model from the pickle file
-def load_model(pickle_file_path):
-    with open(pickle_file_path, 'rb') as file:
+nltk.download('stopwords')
+nltk.download('punkt_tab')
+nltk.download('wordnet')
+
+
+# Set NLTK data path to your custom folder
+nltk.data.path.append(os.path.join('nltk_data'))
+
+lemmatizer = WordNetLemmatizer()
+
+# Load stopwords from the specified folder
+stop_words = set(stopwords.words('english'))
+
+# Load the model from the pickle file in the custom folder
+def load_model(pickle_file_name):
+    #pickle_file_path = os.path.join(custom_folder_path, pickle_file_name)
+    with open(pickle_file_name, 'rb') as file:
         model = pickle.load(file)
     return model
+
+def clean_text(text):
+    text = str(text).lower()
+    # Remove HTML tags
+    text = re.sub('<[^<]+?>', '', text)
+
+    # Remove URLs
+    text = re.sub(r'http\S+', '', text)
+
+    # Remove punctuation
+    text = re.sub(r'[^\w\s]', '', text)
+
+    # Remove numbers
+    text = re.sub(r'\d+', '', text)
+
+    text = re.sub(r'[^\x00-\x7F]+', '', text)  # Remove non-English characters
+
+    # Tokenize, remove stopwords, and lemmatize
+    tokens = word_tokenize(text)
+    filtered_tokens = [word for word in tokens if word not in stop_words]
+    lemmatized_tokens = [lemmatizer.lemmatize(word) for word in filtered_tokens]
+    text = ' '.join(lemmatized_tokens)
+
+    return text
 
 # Function to predict sentiment and probabilities
 def predict_sentiment(model, text, vectorizer):
     # Vectorize the input text using the loaded vectorizer
-    text_vectorized = vectorizer.transform([text])
+    text_vectorized = vectorizer.transform([clean_text(text)])
     
     # Predict the sentiment probabilities
     pred_proba = model.predict_proba(text_vectorized)[0]
@@ -31,26 +75,42 @@ def predict_sentiment(model, text, vectorizer):
 
 # Streamlit app UI
 def main():
-    st.title('Sentiment Analysis App')
+    # Center the main title
+    st.markdown("<h1 style='text-align: center;'>Sentiment Analysis App</h1>", unsafe_allow_html=True)
     
     # Input text from user
     user_input = st.text_area("Enter text for sentiment analysis", height=200)
     
-    # Load the pre-trained model and vectorizer
-    model = load_model('xgb_model.pkl')  # Path to your XGBoost pickle file
-    vectorizer = load_model('vectorizer.pkl')  # Path to your vectorizer pickle file (e.g., TfidfVectorizer)
+    # Load the pre-trained model and vectorizer from the custom folder
+    model = load_model('rfc_model.pkl')  # Path to your RandomForest pickle file
+    vectorizer = load_model('tfidf_vectorizer.pkl')  # Path to your TfidfVectorizer pickle file
     
-    # Predict sentiment when button is clicked
-    if st.button('Predict Sentiment'):
+    # Center the button
+    button_html = """
+    <div style="display: flex; justify-content: center;">
+        <button style= text-align: center; 
+                       text-decoration: none; display: inline-block; font-size: 16px;">
+            Predict Sentiment
+        </button>
+    </div>
+    """
+    
+    if st.markdown(button_html, unsafe_allow_html=True):  # Display centered button
         if user_input:
             sorted_sentiments = predict_sentiment(model, user_input, vectorizer)
             
-            # Display sentiment results in descending order of probabilities
-            st.write("### Sentiment Probabilities:")
+            # Center the sentiment probabilities title
+            st.markdown("### <div style='text-align: center;'>Sentiment Probabilities:</div>", unsafe_allow_html=True)
+            
+            results_html = "<div style='text-align: center;'>"
             for sentiment, probability in sorted_sentiments:
-                st.write(f"**{sentiment}**: {probability:.4f}")
+                results_html += f"<p><strong>{sentiment}:</strong> {probability:.4f}</p>"
+            results_html += "</div>"
+            
+            # Display the results in the center
+            st.markdown(results_html, unsafe_allow_html=True)
         else:
-            st.write("Please enter some text for sentiment analysis.")
+            st.write(" ")
 
 if __name__ == '__main__':
     main()
